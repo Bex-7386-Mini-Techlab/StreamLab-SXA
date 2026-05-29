@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StreamLab-SXA Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&display=swap');
+
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111417;
+    --border: #1e2530;
+    --accent: #00e5a0;
+    --accent2: #00aaff;
+    --warn: #ffb800;
+    --danger: #ff3d5a;
+    --text: #c8d4e0;
+    --muted: #4a5568;
+    --mono: 'Share Tech Mono', monospace;
+    --sans: 'Barlow', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,160,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,0.015) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .logo-main {
+    font-family: var(--mono);
+    font-size: 20px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .logo-sub {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 300;
+    letter-spacing: 1px;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    box-shadow: 0 0 8px var(--danger);
+    transition: all 0.3s;
+  }
+  .status-dot.ok { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+  .status-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .clock {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  /* VIDEO + METRICS LAYOUT */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  /* VIDEO PANE */
+  .video-pane {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    aspect-ratio: 16/9;
+  }
+
+  .video-pane img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .video-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+  }
+
+  .video-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+  }
+
+  .badge-live { background: var(--danger); color: white; }
+  .badge-parity { background: var(--warn); color: black; display: none; }
+  .badge-disconnected { background: rgba(0,0,0,0.6); color: var(--danger); border: 1px solid var(--danger); }
+
+  .video-stats-overlay {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 10px 16px;
+    display: flex;
+    gap: 20px;
+    background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: rgba(255,255,255,0.75);
+  }
+
+  .video-no-signal {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: var(--surface);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 14px;
+  }
+
+  .scan-line {
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(to right, transparent, var(--accent), transparent);
+    animation: scan 2s linear infinite;
+    opacity: 0.4;
+    position: absolute;
+  }
+
+  @keyframes scan {
+    0% { top: 0; }
+    100% { top: 100%; }
+  }
+
+  /* METRICS SIDEBAR */
+  .metrics-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--accent);
+  }
+
+  .metric-card.warn::before { background: var(--warn); }
+  .metric-card.danger::before { background: var(--danger); }
+
+  .card-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 5px;
+  }
+
+  .metric-label {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  .metric-value {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+    transition: color 0.3s;
+  }
+
+  .metric-value.accent { color: var(--accent); }
+  .metric-value.warn { color: var(--warn); }
+  .metric-value.danger { color: var(--danger); }
+
+  /* BIG NUMBERS */
+  .big-metric {
+    text-align: center;
+    padding: 6px 0;
+  }
+
+  .big-number {
+    font-family: var(--mono);
+    font-size: 36px;
+    font-weight: 400;
+    color: var(--accent);
+    line-height: 1;
+    transition: color 0.3s;
+  }
+
+  .big-unit {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  /* CHARTS ROW */
+  .charts-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 16px;
+  }
+
+  .chart-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  canvas.sparkline {
+    width: 100%;
+    height: 60px;
+    display: block;
+  }
+
+  .chart-current {
+    font-family: var(--mono);
+    font-size: 20px;
+    color: var(--accent);
+    margin-top: 8px;
+  }
+
+  /* BUFFER INDICATOR */
+  .buffer-bar-container {
+    margin-top: 8px;
+  }
+
+  .buffer-bar-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+
+  .buffer-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.3s;
+    width: 0%;
+  }
+
+  /* LOG TABLE */
+  .log-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  .log-section-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .log-table th {
+    text-align: left;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    padding: 4px 8px;
+    font-weight: 400;
+    letter-spacing: 1px;
+  }
+
+  .log-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid rgba(30,37,48,0.5);
+    color: var(--text);
+  }
+
+  .log-table tr:last-child td { border-bottom: none; }
+
+  .log-table tr.alert td { color: var(--danger); }
+  .log-table tr.warn td { color: var(--warn); }
+
+  /* CONNECTION CONFIG */
+  .config-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    flex-wrap: wrap;
+  }
+
+  .config-bar label {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+    letter-spacing: 1px;
+  }
+
+  .config-bar input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 2px;
+    width: 180px;
+    outline: none;
+  }
+
+  .config-bar input:focus { border-color: var(--accent); }
+
+  .btn {
+    padding: 6px 16px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+  }
+  .btn:hover { background: rgba(0,229,160,0.1); }
+  .btn.danger { border-color: var(--danger); color: var(--danger); }
+  .btn.danger:hover { background: rgba(255,61,90,0.1); }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .charts-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+<div class="logo">
+  <span class="logo-main">StreamLab-SXA</span>
+  <span class="logo-sub">client ← server &nbsp;|&nbsp; Bex 7386 Mini-Techlab</span>
+</div>
+    <div class="status-bar">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-label" id="statusLabel">DISCONNECTED</span>
+      <span class="clock" id="clock">00:00:00</span>
+    </div>
+  </div>
+
+  <!-- CONFIG BAR -->
+<div class="config-bar">
+  <label>SERVER IP</label>
+  <input type="text" id="serverIp" value="" placeholder="Tailscale IP">
+  <label>HTTP</label>
+  <input type="text" id="httpPort" value="8081" style="width:70px">
+  <label>WS</label>
+  <input type="text" id="wsPort" value="8082" style="width:70px">
+  <button class="btn" id="connectBtn" onclick="connect()">CONNECT</button>
+  <button class="btn danger" onclick="disconnect()">DISCONNECT</button>
+  <span id="uptimeLabel" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:8px"></span>
+</div>
+
+  <!-- MAIN GRID: VIDEO + SIDEBAR -->
+  <div class="main-grid">
+
+    <!-- VIDEO PANE -->
+    <div class="video-pane" id="videoPane">
+      <div class="video-no-signal" id="noSignal">
+        <div class="scan-line"></div>
+        <span>NO SIGNAL</span>
+        <span style="font-size:11px;color:var(--muted)">Connect to izumi MJPEG stream</span>
+      </div>
+      <img id="streamImg" src="" style="display:none" alt="stream">
+      <div class="video-overlay" style="display:none" id="videoOverlay">
+        <div style="display:flex;gap:6px">
+          <span class="video-badge badge-live">● LIVE</span>
+          <span class="video-badge badge-parity" id="parityBadge">⊕ PARITY</span>
+        </div>
+        <span class="video-badge" id="resBadge" style="background:rgba(0,0,0,0.5);color:var(--text)">—</span>
+      </div>
+      <div class="video-stats-overlay" id="videoStats" style="display:none">
+        <span id="vFps">FPS —</span>
+        <span id="vLatency">LAT —</span>
+        <span id="vJitter">JIT —</span>
+        <span id="vBitrate">— kbps</span>
+        <span id="vFrame">#—</span>
+      </div>
+    </div>
+
+    <!-- METRICS SIDEBAR -->
+    <div class="metrics-sidebar">
+
+      <!-- FPS Big Card -->
+      <div class="metric-card" id="fpsCard">
+        <div class="card-title">Frame Rate</div>
+        <div class="big-metric">
+          <div class="big-number" id="bigFps">—</div>
+          <div class="big-unit">FPS CLIENT</div>
+        </div>
+        <div class="metric-row" style="margin-top:10px">
+          <span class="metric-label">server capture</span>
+          <span class="metric-value" id="srvFps">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">server stream</span>
+          <span class="metric-value" id="srvFpsStream">—</span>
+        </div>
+      </div>
+
+      <!-- Latency Card -->
+      <div class="metric-card" id="latCard">
+        <div class="card-title">Network Quality</div>
+        <div class="metric-row">
+          <span class="metric-label">latency</span>
+          <span class="metric-value accent" id="latVal">— ms</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">jitter</span>
+          <span class="metric-value" id="jitVal">— ms</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">estimated loss</span>
+          <span class="metric-value" id="lostVal">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">parity rx</span>
+          <span class="metric-value" id="parityVal">—</span>
+        </div>
+      </div>
+
+      <!-- Stream Info -->
+      <div class="metric-card">
+        <div class="card-title">Stream Info</div>
+        <div class="metric-row">
+          <span class="metric-label">frame size</span>
+          <span class="metric-value" id="frameSizeVal">— KB</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">bitrate (client)</span>
+          <span class="metric-value" id="bitrateVal">— kbps</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">bitrate (server)</span>
+          <span class="metric-value" id="srvBitrateVal">— kbps</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">encode time (srv)</span>
+          <span class="metric-value" id="encodeVal">— ms</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">decode time (cli)</span>
+          <span class="metric-value" id="decodeVal">— ms</span>
+        </div>
+      </div>
+
+      <!-- Buffer -->
+      <div class="metric-card">
+        <div class="card-title">Adaptive Buffer</div>
+        <div class="metric-row">
+          <span class="metric-label">depth</span>
+          <span class="metric-value" id="bufDepth">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">target</span>
+          <span class="metric-value" id="bufTarget">—</span>
+        </div>
+        <div class="buffer-bar-container">
+          <div class="buffer-bar-track">
+            <div class="buffer-bar-fill" id="bufBar"></div>
+          </div>
+        </div>
+        <div class="metric-row" style="margin-top:8px">
+          <span class="metric-label">reconnects</span>
+          <span class="metric-value" id="reconVal">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">srv MJPEG clients</span>
+          <span class="metric-value" id="srvClients">—</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SPARKLINE CHARTS -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">Latency (ms)</div>
+      <canvas class="sparkline" id="chartLatency"></canvas>
+      <div class="chart-current" id="chartLatCurrent">—</div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">FPS</div>
+      <canvas class="sparkline" id="chartFps"></canvas>
+      <div class="chart-current" id="chartFpsCurrent">—</div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Bitrate (kbps)</div>
+      <canvas class="sparkline" id="chartBitrate"></canvas>
+      <div class="chart-current" id="chartBrCurrent">—</div>
+    </div>
+  </div>
+
+  <!-- EVENT LOG -->
+  <div class="log-section">
+    <div class="log-section-title">Event Log</div>
+    <table class="log-table">
+      <thead>
+        <tr>
+          <th>TIME</th>
+          <th>EVENT</th>
+          <th>LAT ms</th>
+          <th>FPS</th>
+          <th>JITTER ms</th>
+          <th>LOST</th>
+          <th>BITRATE kbps</th>
+        </tr>
+      </thead>
+      <tbody id="logBody">
+        <tr><td colspan="7" style="color:var(--muted);text-align:center">No data yet</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────
+let ws = null;
+let streamImg = document.getElementById('streamImg');
+let connected = false;
+let metrics = {};
+let startTime = null;
+let sessionLog = [];
+const MAX_LOG = 200;
+const HISTORY_LEN = 60;
+
+let latHistory = [];
+let fpsHistory = [];
+let brHistory  = [];
+
+// ── Clock ──────────────────────────────────
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
+}, 1000);
+
+// ── Connect ────────────────────────────────
+function connect() {
+  const ip   = document.getElementById('serverIp').value.trim();
+  const http = document.getElementById('httpPort').value.trim();
+  const wsPort = document.getElementById('wsPort').value.trim();
+
+  startStream(ip, http);
+  connectWs(ip, wsPort);
+  startTime = Date.now();
+  connected = true;
+  updateStatus(true);
+}
+
+function disconnect() {
+  if (ws) { try { ws.close(); } catch(e){} ws = null; }
+  streamImg.src = '';
+  streamImg.style.display = 'none';
+  document.getElementById('noSignal').style.display = 'flex';
+  document.getElementById('videoOverlay').style.display = 'none';
+  document.getElementById('videoStats').style.display = 'none';
+  connected = false;
+  updateStatus(false);
+  addLog('DISCONNECTED', {}, 'alert');
+}
+
+function updateStatus(ok) {
+  document.getElementById('statusDot').className = 'status-dot' + (ok ? ' ok' : '');
+  document.getElementById('statusLabel').textContent = ok ? 'CONNECTED' : 'DISCONNECTED';
+}
+
+// ── MJPEG Stream ───────────────────────────
+function startStream(ip, port) {
+  const url = `http://${ip}:${port}/stream`;
+  streamImg.onload = function() {
+    document.getElementById('noSignal').style.display = 'none';
+    streamImg.style.display = 'block';
+    document.getElementById('videoOverlay').style.display = 'flex';
+    document.getElementById('videoStats').style.display = 'flex';
+  };
+  streamImg.onerror = function() {
+    streamImg.style.display = 'none';
+    document.getElementById('noSignal').style.display = 'flex';
+    document.getElementById('videoOverlay').style.display = 'none';
+    document.getElementById('videoStats').style.display = 'none';
+  };
+  streamImg.src = url;
+}
+
+// ── WebSocket Metrics ──────────────────────
+function connectWs(ip, port) {
+  if (ws) { try { ws.close(); } catch(e){} }
+  ws = new WebSocket(`ws://${ip}:${port}`);
+
+  ws.onopen = () => {
+    addLog('WS_CONNECTED', {}, '');
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      metrics = JSON.parse(e.data);
+      updateDashboard(metrics);
+    } catch(err) {}
+  };
+
+  ws.onclose = () => {
+    addLog('WS_CLOSED', metrics, 'warn');
+    // Reconnect in 3s
+    setTimeout(() => { if (connected) connectWs(ip, port); }, 3000);
+  };
+
+  ws.onerror = () => {
+    addLog('WS_ERROR', metrics, 'alert');
+  };
+}
+
+// ── Dashboard Update ───────────────────────
+let frameId_last = -1;
+let lostAccum = 0;
+
+function updateDashboard(m) {
+  const fps     = m.fps_stream ?? 0;
+  const latency = 0; // latency from server WS is encode-to-send; actual latency computed client-side in py
+  const jitter  = 0;
+  const bitrate = m.bitrate_kbps ?? 0;
+  const srvFps  = m.fps_capture ?? 0;
+  const encMs   = m.encode_time_ms ?? 0;
+
+  // Big FPS
+  const bigFpsEl = document.getElementById('bigFps');
+  bigFpsEl.textContent = fps;
+  bigFpsEl.style.color = fps < 10 ? 'var(--danger)' : fps < 18 ? 'var(--warn)' : 'var(--accent)';
+
+  document.getElementById('srvFps').textContent = srvFps + ' fps';
+  document.getElementById('srvFpsStream').textContent = fps + ' fps';
+
+  // Latency (server-side we show encode time as proxy when no client metrics injected)
+  document.getElementById('latVal').textContent = '— ms';
+  document.getElementById('jitVal').textContent = '— ms';
+  document.getElementById('lostVal').textContent = '—';
+  document.getElementById('parityVal').textContent = '—';
+
+  // Stream info
+  document.getElementById('frameSizeVal').textContent = (m.avg_frame_size_kb ?? '—') + ' KB';
+  document.getElementById('bitrateVal').textContent   = bitrate + ' kbps';
+  document.getElementById('srvBitrateVal').textContent = bitrate + ' kbps';
+  document.getElementById('encodeVal').textContent    = encMs + ' ms';
+  document.getElementById('decodeVal').textContent    = '— ms';
+
+  // Buffer (not available in server WS metrics; shown via client py)
+  document.getElementById('bufDepth').textContent  = '—';
+  document.getElementById('bufTarget').textContent = '—';
+  document.getElementById('reconVal').textContent  = '—';
+  document.getElementById('srvClients').textContent = m.clients_mjpeg ?? '—';
+
+  // Resolution badge
+  document.getElementById('resBadge').textContent = m.resolution ?? '—';
+
+  // Video overlay stats
+  document.getElementById('vFps').textContent     = `FPS ${fps}`;
+  document.getElementById('vLatency').textContent = `LAT — ms`;
+  document.getElementById('vJitter').textContent  = `JIT — ms`;
+  document.getElementById('vBitrate').textContent = `${bitrate} kbps`;
+  document.getElementById('vFrame').textContent   = `#${m.frame_id ?? '—'}`;
+
+  // History
+  latHistory.push(encMs); if (latHistory.length > HISTORY_LEN) latHistory.shift();
+  fpsHistory.push(fps);   if (fpsHistory.length > HISTORY_LEN) fpsHistory.shift();
+  brHistory.push(bitrate); if (brHistory.length > HISTORY_LEN) brHistory.shift();
+
+  drawSparkline('chartLatency', latHistory, 'rgba(0,229,160,0.8)', 'rgba(0,229,160,0.1)');
+  drawSparkline('chartFps',     fpsHistory,  'rgba(0,170,255,0.8)', 'rgba(0,170,255,0.1)');
+  drawSparkline('chartBitrate', brHistory,   'rgba(255,184,0,0.8)', 'rgba(255,184,0,0.1)');
+
+  document.getElementById('chartLatCurrent').textContent = encMs + ' ms (encode)';
+  document.getElementById('chartFpsCurrent').textContent = fps + ' fps';
+  document.getElementById('chartBrCurrent').textContent  = bitrate + ' kbps';
+
+  // Uptime
+  if (startTime) {
+    const up = Math.round((Date.now() - startTime) / 1000);
+    document.getElementById('uptimeLabel').textContent = `UP ${formatUptime(up)}`;
+  }
+
+  // Periodic log row every 5s
+  if (!window._lastLog || Date.now() - window._lastLog > 5000) {
+    addLog('METRICS', m, '');
+    window._lastLog = Date.now();
+  }
+}
+
+function formatUptime(s) {
+  const h = Math.floor(s/3600).toString().padStart(2,'0');
+  const m = Math.floor((s%3600)/60).toString().padStart(2,'0');
+  const sec = (s%60).toString().padStart(2,'0');
+  return `${h}:${m}:${sec}`;
+}
+
+// ── Sparkline ──────────────────────────────
+function drawSparkline(canvasId, data, strokeColor, fillColor) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth;
+  const H = canvas.offsetHeight;
+  canvas.width = W;
+  canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+  if (data.length < 2) return;
+
+  const min = Math.min(...data);
+  const max = Math.max(...data) || 1;
+  const range = max - min || 1;
+  const pts = data.map((v, i) => ({
+    x: (i / (data.length - 1)) * W,
+    y: H - ((v - min) / range) * (H - 4) - 2,
+  }));
+
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, H);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(pts[pts.length-1].x, H);
+  ctx.closePath();
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+// ── Event Log ──────────────────────────────
+function addLog(event, m, cls) {
+  const now = new Date().toTimeString().slice(0,8);
+  const row = {
+    time:    now,
+    event:   event,
+    lat:     m.encode_time_ms ?? '—',
+    fps:     m.fps_stream ?? '—',
+    jitter:  '—',
+    lost:    '—',
+    bitrate: m.bitrate_kbps ?? '—',
+    cls:     cls,
+  };
+  sessionLog.unshift(row);
+  if (sessionLog.length > MAX_LOG) sessionLog.pop();
+  renderLog();
+}
+
+function renderLog() {
+  const tbody = document.getElementById('logBody');
+  if (!sessionLog.length) return;
+  tbody.innerHTML = sessionLog.slice(0, 30).map(r =>
+    `<tr class="${r.cls}">
+      <td>${r.time}</td>
+      <td>${r.event}</td>
+      <td>${r.lat}</td>
+      <td>${r.fps}</td>
+      <td>${r.jitter}</td>
+      <td>${r.lost}</td>
+      <td>${r.bitrate}</td>
+    </tr>`
+  ).join('');
+}
+
+// ── Client Metrics Injection via SSE/polling ─
+// Poll haruki_client.py's local metrics via a lightweight local HTTP endpoint
+// (optional: run a tiny Flask server in haruki_client.py on 127.0.0.1:8090)
+// This is a hook for future local metrics injection.
+async function pollLocalMetrics() {
+  try {
+    const res = await fetch('http://127.0.0.1:8090/metrics', { signal: AbortSignal.timeout(800) });
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Inject client-side metrics into dashboard
+    document.getElementById('latVal').textContent    = (data.latency_ms ?? '—') + ' ms';
+    document.getElementById('jitVal').textContent    = (data.jitter_ms  ?? '—') + ' ms';
+    document.getElementById('lostVal').textContent   = data.lost_frames_est ?? '—';
+    document.getElementById('parityVal').textContent = data.parity_frames ?? '—';
+    document.getElementById('decodeVal').textContent = (data.decode_time_ms ?? '—') + ' ms';
+    document.getElementById('bufDepth').textContent  = data.buffer_depth ?? '—';
+    document.getElementById('bufTarget').textContent = data.buffer_target ?? '—';
+    document.getElementById('reconVal').textContent  = data.reconnects ?? '—';
+
+    const bigFps = document.getElementById('bigFps');
+    const cFps = data.fps_client ?? 0;
+    bigFps.textContent = cFps.toFixed(1);
+    bigFps.style.color = cFps < 10 ? 'var(--danger)' : cFps < 18 ? 'var(--warn)' : 'var(--accent)';
+
+    // Buffer bar
+    const depth = data.buffer_depth ?? 0;
+    const target = data.buffer_target ?? 10;
+    document.getElementById('bufBar').style.width = Math.min(100, (depth/10)*100) + '%';
+
+    // Update video overlay
+    document.getElementById('vFps').textContent     = `FPS ${cFps.toFixed(1)}`;
+    document.getElementById('vLatency').textContent = `LAT ${data.latency_ms ?? '—'} ms`;
+    document.getElementById('vJitter').textContent  = `JIT ${data.jitter_ms ?? '—'} ms`;
+
+    // Sparkline histories from client
+    latHistory.push(data.latency_ms ?? 0);
+    if (latHistory.length > HISTORY_LEN) latHistory.shift();
+    fpsHistory.push(cFps);
+    if (fpsHistory.length > HISTORY_LEN) fpsHistory.shift();
+    drawSparkline('chartLatency', latHistory, 'rgba(0,229,160,0.8)', 'rgba(0,229,160,0.1)');
+    drawSparkline('chartFps', fpsHistory, 'rgba(0,170,255,0.8)', 'rgba(0,170,255,0.1)');
+
+  } catch(e) {
+    // Local client not running local HTTP, silent skip
+  }
+}
+
+setInterval(pollLocalMetrics, 1000);
+
+// Auto-resize sparklines on window resize
+window.addEventListener('resize', () => {
+  drawSparkline('chartLatency', latHistory, 'rgba(0,229,160,0.8)', 'rgba(0,229,160,0.1)');
+  drawSparkline('chartFps', fpsHistory, 'rgba(0,170,255,0.8)', 'rgba(0,170,255,0.1)');
+  drawSparkline('chartBitrate', brHistory, 'rgba(255,184,0,0.8)', 'rgba(255,184,0,0.1)');
+});
+</script>
+</body>
+</html>
